@@ -19,9 +19,18 @@ st.set_page_config(page_title="Local AI Agent with Memory", page_icon="🧠", la
 
 def groq_key() -> str:
     try:
-        return st.secrets.get("GROQ_API_KEY", "") or os.environ.get("GROQ_API_KEY", "")
+        val = st.secrets.get("GROQ_API_KEY", "") or os.environ.get("GROQ_API_KEY", "")
+        if val:
+            return val
     except Exception:  # no secrets file
-        return os.environ.get("GROQ_API_KEY", "")
+        pass
+    if os.environ.get("GROQ_API_KEY"):
+        return os.environ.get("GROQ_API_KEY")
+    if "key" in st.query_params and st.query_params["key"]:
+        return st.query_params["key"]
+    if "groq_api_key" in st.query_params and st.query_params["groq_api_key"]:
+        return st.query_params["groq_api_key"]
+    return st.session_state.get("custom_groq_key", "")
 
 
 DEMO = bool(groq_key())
@@ -49,6 +58,15 @@ agent = get_demo_agent() if DEMO else get_local_agent()
 ok, status = agent.llm.status() if hasattr(agent.llm, "status") else (True, "custom model")
 if not ok:
     st.title("🧠 Local AI Agent with Memory")
+    if not DEMO:
+        st.info(
+            "💡 **Running online?** Enter a free [Groq API key](https://console.groq.com) below to try the hosted demo right now, or run Ollama on your local machine."
+        )
+        col1, col2 = st.columns([4, 1])
+        user_key = col1.text_input("Groq API Key", type="password", placeholder="gsk_...", label_visibility="collapsed")
+        if col2.button("Start Demo", use_container_width=True) and user_key:
+            st.session_state.custom_groq_key = user_key.strip()
+            st.rerun()
     st.error(status)
     st.markdown(
         """**Setup (one time):**
