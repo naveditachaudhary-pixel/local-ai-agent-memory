@@ -1,0 +1,52 @@
+# One command:  docker compose up
+# Then open http://localhost:8501  (the first start downloads about 2.3 GB of models).
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama-models:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+    # NVIDIA GPU? Uncomment to make replies much faster:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  # Downloads the two models once, then exits. Already-downloaded models are skipped.
+  pull-models:
+    image: ollama/ollama:latest
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["/bin/sh", "-c", "ollama pull ${AGENT_CHAT_MODEL:-llama3.2} && ollama pull ${AGENT_EMBED_MODEL:-nomic-embed-text}"]
+    restart: "no"
+
+  app:
+    build: .
+    depends_on:
+      pull-models:
+        condition: service_completed_successfully
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      AGENT_CHAT_MODEL: ${AGENT_CHAT_MODEL:-llama3.2}
+      AGENT_EMBED_MODEL: ${AGENT_EMBED_MODEL:-nomic-embed-text}
+    ports:
+      - "8501:8501"
+    volumes:
+      - agent-memory:/data
+    restart: unless-stopped
+
+volumes:
+  ollama-models:
+  agent-memory:

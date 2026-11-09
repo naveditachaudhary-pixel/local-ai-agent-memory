@@ -1,0 +1,12 @@
+.git
+.github
+.venv
+venv
+data
+docs
+site
+bench
+tests
+**/__pycache__
+.pytest_cache
+.streamlit/secrets.toml

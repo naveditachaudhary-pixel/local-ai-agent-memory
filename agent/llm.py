@@ -39,6 +39,14 @@ class OllamaLLM:
         res = self.client.embed(model=self.settings.embed_model, input=texts)
         return list(res["embeddings"])
 
+    def chat_models(self) -> list[str]:
+        """Models pulled in Ollama that can chat (embedding-only models are left out)."""
+        try:
+            names = [m["model"] for m in self.client.list()["models"]]
+        except Exception:
+            return []
+        return sorted(n.removesuffix(":latest") for n in names if "embed" not in n.lower())
+
     def status(self) -> tuple[bool, str]:
         """Check that Ollama is running and both models are pulled."""
         try:

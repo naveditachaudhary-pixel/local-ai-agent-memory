@@ -31,6 +31,11 @@ class Settings:
     exchanges_k: int = 3          # how many past exchanges to pull into each prompt
     max_distance: float = field(default_factory=lambda: float(_env("AGENT_MAX_DISTANCE", "0.55")))  # ignore memories less similar than this (cosine distance)
     duplicate_distance: float = 0.12  # a new fact this close to an old one is treated as a duplicate
+    decay_half_life_days: float = 90.0  # unused memories slowly sink in the ranking (see memory.rank_score)
+
+    # Keeping facts current: when a new fact is close to old ones, ask the model whether it replaces them
+    update_facts: bool = field(default_factory=lambda: _env("AGENT_UPDATE_FACTS", "1") not in ("0", "false", "no"))
+    related_distance: float = 0.6     # how close an old fact must be to be checked against a new one
 
     # Short-term context and summaries
     recent_turns: int = 6         # user+assistant pairs kept verbatim in the prompt

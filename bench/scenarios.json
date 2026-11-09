@@ -1,0 +1,121 @@
+[
+  {
+    "name": "Basic profile",
+    "type": "recall",
+    "messages": [
+      "Hi! My name is Maya and I work as a pharmacist.",
+      "I live in Denver with my partner."
+    ],
+    "probes": [
+      {"question": "What's my name?", "expect": ["maya"]},
+      {"question": "What do I do for a living?", "expect": ["pharmacist"]},
+      {"question": "Which city do I live in?", "expect": ["denver"]}
+    ]
+  },
+  {
+    "name": "Paraphrased questions",
+    "type": "recall",
+    "messages": [
+      "I'm learning Spanish because I'm moving my team to our Madrid office next spring.",
+      "My favourite programming language is Rust."
+    ],
+    "probes": [
+      {"question": "Which language am I studying at the moment?", "expect": ["spanish"]},
+      {"question": "What do I like to code in?", "expect": ["rust"]}
+    ]
+  },
+  {
+    "name": "Buried in small talk",
+    "type": "recall",
+    "messages": [
+      "Ugh, it's raining again today.",
+      "Can you recommend a good podcast?",
+      "By the way, I have a golden retriever called Biscuit.",
+      "What's a quick dinner idea?",
+      "Thanks, that sounds great."
+    ],
+    "probes": [
+      {"question": "What's my dog's name?", "expect": ["biscuit"]},
+      {"question": "What breed is my dog?", "expect": ["golden"]}
+    ]
+  },
+  {
+    "name": "Several facts in one message",
+    "type": "recall",
+    "messages": [
+      "Quick intro: I'm Omar, I'm a high school chemistry teacher, I run marathons, and I'm allergic to peanuts."
+    ],
+    "probes": [
+      {"question": "What subject do I teach?", "expect": ["chemistry"]},
+      {"question": "What sport do I do?", "expect": ["marathon"]},
+      {"question": "Am I allergic to anything?", "expect": ["peanut"]}
+    ]
+  },
+  {
+    "name": "Moved city",
+    "type": "update",
+    "messages": [
+      "I'm Lena and I live in Chicago.",
+      "Big news, I just moved to Seattle for a new role!"
+    ],
+    "probes": [
+      {"question": "Where do I live now?", "expect": ["seattle"], "stale": ["chicago"]}
+    ]
+  },
+  {
+    "name": "Changed job",
+    "type": "update",
+    "messages": [
+      "I work as a barista at a cafe downtown.",
+      "Update: I quit the cafe, and I now work as a junior data analyst at a bank."
+    ],
+    "probes": [
+      {"question": "What's my job?", "expect": ["analyst"], "stale": ["barista"]}
+    ]
+  },
+  {
+    "name": "Changed preference",
+    "type": "update",
+    "messages": [
+      "I prefer long, detailed answers with lots of background.",
+      "Actually, I've changed my mind: I prefer short answers in bullet points."
+    ],
+    "probes": [
+      {"question": "How do I like my answers?", "expect": ["short"], "stale": ["long", "detailed"]}
+    ]
+  },
+  {
+    "name": "Corrected name",
+    "type": "update",
+    "messages": [
+      "My name is Jon.",
+      "Sorry, typo earlier. My name is actually John, with an h."
+    ],
+    "probes": [
+      {"question": "What's my name?", "expect": ["john"], "stale": ["jon"]}
+    ]
+  },
+  {
+    "name": "New pet replaces old plan",
+    "type": "update",
+    "messages": [
+      "I'm planning to adopt a cat next month.",
+      "Change of plans: we adopted a beagle puppy named Pepper instead of a cat."
+    ],
+    "probes": [
+      {"question": "What pet do I have?", "expect": ["pepper"], "stale": ["cat"]}
+    ]
+  },
+  {
+    "name": "Update keeps unrelated facts",
+    "type": "update",
+    "messages": [
+      "I'm Ana, I live in Boston and I play the cello.",
+      "I've relocated to Toronto."
+    ],
+    "probes": [
+      {"question": "Where do I live?", "expect": ["toronto"], "stale": ["boston"]},
+      {"question": "What instrument do I play?", "expect": ["cello"]}
+    ]
+  }
+]

@@ -17,10 +17,14 @@ No API keys, no cloud, and no data leaves your laptop. The model runs locally th
 
 - **Long-term memory by meaning.** Facts about you and past conversations are stored as embeddings in a local [ChromaDB](https://www.trychroma.com/) database, then recalled by semantic similarity rather than keyword matching.
 - **Automatic fact extraction.** After each message, the model pulls out durable facts ("The user works as a data analyst.") and skips small talk. Near-duplicates are detected and not stored twice.
+- **Facts stay current.** Say "I just moved to Austin" and the old city is replaced, not kept alongside it. Unrelated facts are left alone.
+- **Reinforcement and decay.** Memories that keep being useful rank a little higher, and ones nobody has needed for months slowly sink.
 - **Rolling summary.** Every few turns the agent rewrites a short summary of everything it knows, so long histories stay compact.
-- **Transparent and controllable.** The sidebar shows exactly what the agent remembers. Forget any single fact with one click, or wipe everything.
+- **Transparent and controllable.** The sidebar shows exactly what the agent remembers. Forget any single fact with one click, export everything to a JSON file and import it on another machine, or wipe it all.
+- **Any local model.** Switch between the chat models you've pulled in Ollama from the sidebar.
 - **Streaming replies** in a clean Streamlit chat UI, plus a *Start a new session* button to prove the memory outlasts the chat.
-- **Tested.** Unit tests and an end-to-end UI test run in CI with a fake model, so they need no GPU or Ollama.
+- **Measured.** A [memory benchmark](#benchmark) scores recall, outdated facts and answer accuracy, with and without fact updating.
+- **Tested.** Unit tests, end-to-end UI tests and a Docker build run in CI with a fake model, so they need no GPU or Ollama.
 
 ## How it works
 
@@ -33,18 +37,30 @@ flowchart LR
     L -->|streamed reply| U
     L --> M[Remember]
     M -->|exchange| V[(ChromaDB)]
-    M -->|extract facts, skip duplicates| V
+    M -->|extract facts, skip duplicates, replace outdated ones| V
     M -->|every N turns| S
     V --> R
 ```
 
 Each turn follows **recall → respond → remember**:
 
-1. **Recall:** the message is embedded with `nomic-embed-text`, and the closest facts and past exchanges are pulled from ChromaDB (cosine distance, with a cutoff so unrelated memories stay out).
+1. **Recall:** the message is embedded with `nomic-embed-text`, and the closest facts and past exchanges are pulled from ChromaDB (cosine distance, with a cutoff so unrelated memories stay out). The order is then nudged by how often each memory has been useful and how recently.
 2. **Respond:** the system prompt is assembled from the rolling summary, the recalled facts and related past exchanges, plus the last few turns verbatim. The local model streams its answer.
-3. **Remember:** the exchange is stored, new facts are extracted and de-duplicated, and every few turns the summary is refreshed.
+3. **Remember:** the exchange is stored and new facts are extracted. Each new fact is compared with the closest facts already stored: exact repeats are skipped, and if any are related, the model is asked which of them the new fact makes outdated, and those are removed. Every few turns the summary is refreshed.
 
 ## Quick start
+
+### Option A: Docker (one command)
+
+```bash
+git clone https://github.com/naveditachaudhary-pixel/local-ai-agent-memory.git
+cd local-ai-agent-memory
+docker compose up
+```
+
+Open http://localhost:8501. The first start downloads the two models (about 2.3 GB), and memory is kept in a Docker volume between restarts. To use another model, run `AGENT_CHAT_MODEL=mistral docker compose up`. If you have an NVIDIA GPU, uncomment the `deploy` block in `docker-compose.yml`.
+
+### Option B: Python
 
 **1. Install Ollama and pull two models** (about 2.3 GB in total):
 
@@ -90,6 +106,24 @@ The app is built to run on your own computer, so there are two ways to try it wi
 GROQ_API_KEY = "your-key"
 ```
 
+## Benchmark
+
+`bench/` holds 10 short conversations: 4 test plain recall, and 6 change a fact partway through (a move, a new job, a changed preference, a corrected name). After each conversation the agent starts a new session and answers questions about it. For each question, the benchmark checks three things:
+- whether the right fact was pulled into the prompt;
+- whether an outdated fact was pulled in too;
+- whether the reply was correct.
+
+Every scenario runs twice, with fact updating off and on.
+
+```bash
+python -m bench                   # uses your local Ollama models
+python -m bench --update-readme   # also refreshes the table below
+```
+
+<!-- bench:start -->
+*Results will appear here after the first run of `python -m bench --update-readme` on a machine with Ollama.*
+<!-- bench:end -->
+
 ## Configuration
 
 Set any of these environment variables before starting the app:
@@ -100,6 +134,7 @@ Set any of these environment variables before starting the app:
 | `AGENT_EMBED_MODEL` | `nomic-embed-text` | Embedding model used for memory |
 | `AGENT_DATA_DIR` | `data` | Where the memory database and summary are stored |
 | `AGENT_MAX_DISTANCE` | `0.55` | How similar a memory must be to be recalled (lower is stricter) |
+| `AGENT_UPDATE_FACTS` | `1` | Set to `0` to keep every fact instead of replacing outdated ones |
 | `OLLAMA_HOST` | `http://localhost:11434` | Point at Ollama running on another machine |
 | `GROQ_MODEL` | `openai/gpt-oss-20b` | Hosted model used in demo mode |
 
@@ -113,8 +148,10 @@ agent/
   prompts.py   every prompt template in one place
   agent.py     the recall -> respond -> remember loop
 app.py         Streamlit chat UI with the memory sidebar (switches to demo mode when a hosted-model key is set)
+bench/         memory benchmark: scenarios and the scoring script
 site/          the browser demo page, published with GitHub Pages
-tests/         unit tests + an end-to-end Streamlit test using a fake model
+tests/         unit tests, end-to-end Streamlit tests and a benchmark smoke test, all using a fake model
+Dockerfile, docker-compose.yml   one-command setup with Ollama
 ```
 
 ## Running the tests
@@ -131,14 +168,19 @@ The tests swap in a small fake model with word-count embeddings, and a mock of t
 - **Plain Python over a framework.** The agent loop is about 100 lines, which keeps every step easy to read, test and change.
 - **Facts and exchanges in one collection, tagged by type.** Recall can target each separately (facts are precise, exchanges give context) without managing two databases.
 - **A distance cutoff on recall.** Without it, the agent drags loosely related memories into every prompt, which confuses small local models.
+- **Ask the model only when it matters.** Checking whether a new fact replaces old ones costs an extra model call, so it only happens when a stored fact is close enough to be a candidate. Most messages skip it.
+- **Decay nudges, it doesn't delete.** Old memories sink in the ranking but stay searchable, so a strong match from a year ago still wins over a weak recent one.
 - **Forgiving JSON parsing.** Small local models often wrap JSON in extra text, so fact extraction pulls out the first `[...]` block and ignores anything malformed.
 
 ## Roadmap
 
-- [ ] Memory importance scores and decay for stale facts
+- [x] Replace outdated facts when something changes
+- [x] Memory benchmark
+- [x] Reinforcement and decay in recall ranking
+- [x] Export and import memory as JSON
+- [x] One-command Docker setup
 - [ ] Tool use (calendar, notes) with memory of past tool results
-- [ ] Export and import memory as JSON
-- [ ] Bring the browser demo's fact updating ("I moved to Austin" replaces the old city) into the main agent
+- [ ] Separate memory profiles for several people on one machine
 
 ## License
 

@@ -19,6 +19,15 @@ class FakeBackend(FakeLLM):
         return True, "fake-model · fake-embed"
 
 
+@pytest.fixture(autouse=True)
+def fresh_cache():
+    """The app caches its agent; clear it so each test gets its own model and data folder."""
+    import streamlit as st
+    st.cache_resource.clear()
+    yield
+    st.cache_resource.clear()
+
+
 def sidebar_text(at):
     return " ".join(m.value for m in at.sidebar.markdown)
 
@@ -74,3 +83,30 @@ def test_demo_message_limit(demo_app):
     at.session_state.sent = 25
     at.run()
     assert "message limit" in at.warning[0].value
+
+
+def test_moving_city_updates_the_sidebar(local_app):
+    at = local_app
+    at.chat_input[0].set_value("I live in Cincinnati.").run()
+    assert "The user lives in Cincinnati." in sidebar_text(at)
+    at.chat_input[0].set_value("I moved to Austin.").run()
+    assert not at.exception
+    assert "The user lives in Austin." in sidebar_text(at)
+    assert "The user lives in Cincinnati." not in sidebar_text(at)
+
+
+class FakeWithModels(FakeBackend):
+    def chat_models(self):
+        return ["llama3.2", "mistral", "qwen2.5"]
+
+
+def test_model_picker_switches_chat_model(tmp_path, monkeypatch):
+    monkeypatch.setenv("AGENT_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.setattr(llm_module, "OllamaLLM", FakeWithModels)
+    at = AppTest.from_file(APP, default_timeout=30)
+    at.run()
+    assert at.sidebar.selectbox[0].value == "llama3.2"
+    at.sidebar.selectbox[0].select("mistral").run()
+    assert not at.exception
+    assert at.sidebar.selectbox[0].value == "mistral"

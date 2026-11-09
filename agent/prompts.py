@@ -36,3 +36,14 @@ New conversation:
 {conversation}
 
 Updated summary:"""
+
+RECONCILE = """You keep an assistant's memory of a user up to date. A new fact about the user was just learned.
+Decide which existing facts it makes outdated: facts that can no longer be true at the same time as the new one
+(a new city, a new job, a changed preference, a corrected name). Facts that are only related, or add detail, stay.
+
+New fact: {new}
+
+Existing facts:
+{existing}
+
+Reply with a JSON array of the numbers of the outdated facts, for example [2]. Reply [] if none are outdated."""

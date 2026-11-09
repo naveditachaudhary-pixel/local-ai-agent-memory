@@ -35,7 +35,15 @@ class FakeLLM:
                 facts.append(f"The user's name is {m.group(1)}.")
             if m := re.search(r"i work as an? ([\w ]+?)[.,]", prompt, re.I):
                 facts.append(f"The user works as a {m.group(1)}.")
+            if m := re.search(r"i (?:live in|moved to) (\w+)", prompt, re.I):
+                facts.append(f"The user lives in {m.group(1)}.")
             return "Here you go:\n" + json.dumps(facts)
+        if "memory of a user up to date" in prompt:
+            # Outdated = an existing fact with the same opening ("The user lives in ...") but a different ending.
+            new = re.search(r"New fact: (.+)", prompt).group(1)
+            stale = [int(n) for n, text in re.findall(r"^(\d+)\. (.+)$", prompt, re.M)
+                     if text.split()[:4] == new.split()[:4] and text != new]
+            return f"Outdated: {json.dumps(stale)}"
         if "running summary" in prompt:
             return "The user has been chatting about their work."
         return "Noted."

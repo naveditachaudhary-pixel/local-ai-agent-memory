@@ -4,6 +4,7 @@ Locally it uses Ollama. When a GROQ_API_KEY is configured (for example in Stream
 it switches to demo mode: a hosted model, and memory that is private to each visitor's session.
 """
 
+import json
 import os
 import tempfile
 from pathlib import Path
@@ -69,7 +70,17 @@ if "sent" not in st.session_state:
 # ---------- sidebar: what the agent remembers ----------
 with st.sidebar:
     st.subheader("🧠 Memory")
-    st.caption(f"Model: {status}")
+    models = agent.llm.chat_models() if hasattr(agent.llm, "chat_models") else []
+    if len(models) > 1:
+        current = agent.settings.chat_model
+        index = models.index(current) if current in models else 0
+        chosen = st.selectbox("Chat model", models, index=index, help="Any chat model you've pulled with `ollama pull`.")
+        if chosen != current:
+            agent.settings.chat_model = chosen
+            st.rerun()
+        st.caption(f"Embeddings: {agent.settings.embed_model}")
+    else:
+        st.caption(f"Model: {status}")
 
     facts = agent.memory.all(FACT)
     c1, c2, c3 = st.columns(3)
@@ -101,6 +112,23 @@ with st.sidebar:
         if col_btn.button("", icon=":material/close:", key=f"forget-{fact.id}", help="Forget this"):
             agent.memory.forget(fact.id)
             st.rerun()
+
+    with st.expander("Export / import"):
+        st.download_button("Download memory (JSON)", json.dumps(agent.export_memory(), indent=2),
+                           file_name="agent-memory.json", mime="application/json",
+                           icon=":material/download:", use_container_width=True)
+        upload = st.file_uploader("Import a memory file", type="json", key=f"upload-{st.session_state.get('uploads', 0)}")
+        if upload is not None and st.button("Import", icon=":material/upload:", use_container_width=True):
+            try:
+                added = agent.import_memory(json.loads(upload.getvalue()))
+            except (ValueError, json.JSONDecodeError) as err:
+                st.error(str(err) if isinstance(err, ValueError) else "That file isn't valid JSON.")
+            else:
+                st.session_state.uploads = st.session_state.get("uploads", 0) + 1  # clears the uploader
+                st.session_state.imported = added
+                st.rerun()
+        if "imported" in st.session_state:
+            st.success(f"Imported {st.session_state.pop('imported')} memories.")
 
     with st.expander("Danger zone"):
         sure = st.checkbox("I understand this deletes all memory")
@@ -162,6 +190,10 @@ if prompt := st.chat_input("Say something…"):
             st.caption("Recalled: " + " · ".join(recalled))
 
     st.session_state.messages.append({"role": "assistant", "content": reply, "recalled": recalled})
+    replaced = {new for _, new in agent.last_updated}
+    for old, new in agent.last_updated:
+        st.toast(f"Updated: {new} (was: {old})", icon="🔄")
     for fact in agent.last_learned:
-        st.toast(f"Remembered: {fact}", icon="🧠")
+        if fact not in replaced:
+            st.toast(f"Remembered: {fact}", icon="🧠")
     st.rerun()  # refresh the sidebar counters and facts after every turn

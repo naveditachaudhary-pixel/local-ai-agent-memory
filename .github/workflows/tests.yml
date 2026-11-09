@@ -18,3 +18,21 @@ jobs:
           cache: pip
       - run: pip install -r requirements-dev.txt
       - run: pytest -q
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the compose file
+        run: docker compose config -q
+      - name: Build the app image
+        run: docker build -t local-ai-agent-memory .
+      - name: Start it and wait for the health check
+        run: |
+          docker run -d --name app -p 8501:8501 local-ai-agent-memory
+          for i in $(seq 1 30); do
+            curl -fsS http://localhost:8501/_stcore/health && exit 0
+            sleep 2
+          done
+          docker logs app
+          exit 1
