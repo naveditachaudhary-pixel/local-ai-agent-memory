@@ -12,3 +12,6 @@ venv/
 .DS_Store
 .vscode/
 .idea/
+
+# Streamlit secrets (API keys)
+.streamlit/secrets.toml

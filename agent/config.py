@@ -11,10 +11,17 @@ def _env(name: str, default: str) -> str:
 
 @dataclass
 class Settings:
+    # Which model backend to use: "ollama" (local, the default) or "groq" (hosted, used by the online demo)
+    backend: str = field(default_factory=lambda: _env("AGENT_BACKEND", "ollama"))
+
     # Ollama
     ollama_host: str = field(default_factory=lambda: _env("OLLAMA_HOST", "http://localhost:11434"))
     chat_model: str = field(default_factory=lambda: _env("AGENT_CHAT_MODEL", "llama3.2"))
     embed_model: str = field(default_factory=lambda: _env("AGENT_EMBED_MODEL", "nomic-embed-text"))
+
+    # Hosted backend (online demo only)
+    groq_model: str = field(default_factory=lambda: _env("GROQ_MODEL", "openai/gpt-oss-20b"))
+    demo_message_limit: int = 25  # messages per visitor in the online demo
 
     # Where memory lives on disk
     data_dir: Path = field(default_factory=lambda: Path(_env("AGENT_DATA_DIR", "data")))

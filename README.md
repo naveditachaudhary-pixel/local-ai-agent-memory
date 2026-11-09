@@ -7,7 +7,11 @@ Tell it your name, your job or what you're working on, close the app, come back 
 
 No API keys, no cloud, and no data leaves your laptop. The model runs locally through [Ollama](https://ollama.com).
 
-![Chat on the right, long-term memory on the left](docs/screenshot.png)
+**Try it:** [▶ Live demo with real AI](https://local-ai-agent-memory.streamlit.app) · [Browser demo, no sign-up](https://naveditachaudhary-pixel.github.io/local-ai-agent-memory/) · [Video walkthrough (MP4)](docs/demo.mp4)
+
+![Tell it about yourself, start a new session, and it still remembers you](docs/demo.gif)
+
+<sub>The walkthrough above uses scripted replies so it could be recorded without a model. The live demo and the app on your own computer use a real one.</sub>
 
 ## Features
 
@@ -15,7 +19,7 @@ No API keys, no cloud, and no data leaves your laptop. The model runs locally th
 - **Automatic fact extraction.** After each message, the model pulls out durable facts ("The user works as a data analyst.") and skips small talk. Near-duplicates are detected and not stored twice.
 - **Rolling summary.** Every few turns the agent rewrites a short summary of everything it knows, so long histories stay compact.
 - **Transparent and controllable.** The sidebar shows exactly what the agent remembers. Forget any single fact with one click, or wipe everything.
-- **Streaming replies** in a clean Streamlit chat UI.
+- **Streaming replies** in a clean Streamlit chat UI, plus a *Start a new session* button to prove the memory outlasts the chat.
 - **Tested.** Unit tests and an end-to-end UI test run in CI with a fake model, so they need no GPU or Ollama.
 
 ## How it works
@@ -62,6 +66,30 @@ streamlit run app.py
 
 Open http://localhost:8501 and introduce yourself. Then restart the app and ask *"What do you remember about me?"*
 
+## Online demos
+
+The app is built to run on your own computer, so there are two ways to try it without installing anything:
+
+| Demo | Replies | Memory |
+|---|---|---|
+| [Live demo](https://local-ai-agent-memory.streamlit.app) on Streamlit Community Cloud | Real model (`openai/gpt-oss-20b` on Groq) | Real vector memory, private to your browser tab and deleted when you close it |
+| [Browser demo](https://naveditachaudhary-pixel.github.io/local-ai-agent-memory/) on GitHub Pages | Pre-written templates | Simple pattern-based memory saved in your browser, which also updates facts that change |
+
+**Demo mode.** When a `GROQ_API_KEY` is configured, `app.py` switches to demo mode:
+- Chat goes to a hosted model, and embeddings run inside the app with ChromaDB's built-in MiniLM model.
+- Each visitor gets their own temporary memory.
+- Each visitor is limited to 25 messages.
+
+**To deploy your own copy:**
+1. Fork this repo.
+2. Create a free API key at [console.groq.com](https://console.groq.com).
+3. On [share.streamlit.io](https://share.streamlit.io), create an app from your fork with `app.py` as the entry point.
+4. Under **Advanced settings → Secrets**, add:
+
+```toml
+GROQ_API_KEY = "your-key"
+```
+
 ## Configuration
 
 Set any of these environment variables before starting the app:
@@ -73,17 +101,19 @@ Set any of these environment variables before starting the app:
 | `AGENT_DATA_DIR` | `data` | Where the memory database and summary are stored |
 | `AGENT_MAX_DISTANCE` | `0.55` | How similar a memory must be to be recalled (lower is stricter) |
 | `OLLAMA_HOST` | `http://localhost:11434` | Point at Ollama running on another machine |
+| `GROQ_MODEL` | `openai/gpt-oss-20b` | Hosted model used in demo mode |
 
 ## Project structure
 
 ```
 agent/
   config.py    settings, all overridable with environment variables
-  llm.py       Ollama wrapper: chat, streaming, embeddings, health check
+  llm.py       model backends: Ollama (local) and a hosted model for the online demo
   memory.py    VectorMemory (ChromaDB) and SummaryStore (rolling summary)
   prompts.py   every prompt template in one place
   agent.py     the recall -> respond -> remember loop
-app.py         Streamlit chat UI with the memory sidebar
+app.py         Streamlit chat UI with the memory sidebar (switches to demo mode when a hosted-model key is set)
+site/          the browser demo page, published with GitHub Pages
 tests/         unit tests + an end-to-end Streamlit test using a fake model
 ```
 
@@ -94,7 +124,7 @@ pip install -r requirements-dev.txt
 pytest -q
 ```
 
-The tests swap in a small fake model with word-count embeddings, so they run in about two seconds without Ollama.
+The tests swap in a small fake model with word-count embeddings, and a mock of the hosted API for the online demo, so they run in seconds without Ollama or a network connection.
 
 ## Design decisions
 
@@ -108,6 +138,7 @@ The tests swap in a small fake model with word-count embeddings, so they run in 
 - [ ] Memory importance scores and decay for stale facts
 - [ ] Tool use (calendar, notes) with memory of past tool results
 - [ ] Export and import memory as JSON
+- [ ] Bring the browser demo's fact updating ("I moved to Austin" replaces the old city) into the main agent
 
 ## License
 

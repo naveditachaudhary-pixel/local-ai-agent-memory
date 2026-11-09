@@ -8,7 +8,7 @@ from typing import Iterator
 
 from . import prompts
 from .config import Settings
-from .llm import LLM, Message, OllamaLLM
+from .llm import LLM, Message, make_llm
 from .memory import EXCHANGE, FACT, Memory, SummaryStore, VectorMemory
 
 
@@ -16,7 +16,7 @@ class Agent:
     def __init__(self, settings: Settings | None = None, llm: LLM | None = None,
                  memory: VectorMemory | None = None, summaries: SummaryStore | None = None):
         self.settings = settings or Settings()
-        self.llm = llm or OllamaLLM(self.settings)
+        self.llm = llm or make_llm(self.settings)
         self.memory = memory or VectorMemory(self.settings.chroma_dir, embed=self.llm.embed)
         self.summaries = summaries or SummaryStore(self.settings.summary_file)
         self.history: list[Message] = []          # this session only
@@ -82,6 +82,12 @@ class Agent:
             summary=self.summaries.summary or "(empty)", conversation=conversation)}])
         self.summaries.set(new)
         return new
+
+    def new_session(self) -> None:
+        """Start a fresh conversation, as if the app was restarted. Long-term memory is kept."""
+        self.history.clear()
+        self.last_recalled = []
+        self.last_learned = []
 
     def reset_memory(self) -> None:
         self.memory.clear()

@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Local AI Agent with Memory · Browser demo</title>
+<meta name="description" content="Try the memory of a local AI agent in your browser: tell it about yourself, start a new session, and see what it remembers.">
+<meta property="og:title" content="Local AI Agent with Memory · Browser demo">
+<meta property="og:description" content="Tell it about yourself, start a new session, and see what it remembers.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500&family=Geist+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #fbfaf8; --paper: #ffffff; --ink: #161616; --muted: #77736d; --line: #e7e4df;
+    --accent: #3b4a6b; --ok: #2f6b4f; --no: #9a3b2f; --soft: #f3f1ed;
+    --display: "Instrument Serif", "Iowan Old Style", Georgia, serif;
+    --body: "Geist", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --mono: "Geist Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #111110; --paper: #1a1a19; --ink: #ecebe8; --muted: #9a968f; --line: #2c2b29;
+            --accent: #a9b6d6; --ok: #7fc4a0; --no: #e08a7c; --soft: #222220; }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--ink); font: 400 15px/1.55 var(--body); -webkit-font-smoothing: antialiased; }
+  a { color: inherit; text-underline-offset: 3px; text-decoration-color: var(--line); }
+  a:hover { text-decoration-color: var(--ink); }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 40px 24px 48px; }
+
+  header { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; flex-wrap: wrap; margin-bottom: 20px; }
+  .eyebrow { font: 400 11px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 0 0 12px; }
+  h1 { font: 400 clamp(34px, 5vw, 52px)/1.02 var(--display); margin: 0; letter-spacing: -.01em; }
+  h1 em { color: var(--muted); }
+  .links { display: flex; gap: 8px; flex-wrap: wrap; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border: 1px solid var(--line); border-radius: 999px;
+          background: var(--paper); text-decoration: none; font-size: 13px; white-space: nowrap; }
+  .pill:hover { border-color: var(--ink); }
+  .pill.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+  .notice { display: flex; gap: 10px; align-items: flex-start; padding: 12px 16px; border: 1px dashed var(--line); border-radius: 12px;
+            color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+  .notice b { color: var(--ink); font-weight: 500; }
+
+  .grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 20px; align-items: start; }
+  @media (max-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr); } .chat { height: 560px; min-height: 0; } .panel { order: 2; } }
+
+  .card { background: var(--paper); border: 1px solid var(--line); border-radius: 16px; }
+
+  /* chat */
+  .chat { display: flex; flex-direction: column; height: min(640px, calc(100vh - 230px)); min-height: 460px; }
+  .log { flex: 1; overflow-y: auto; padding: 22px 22px 8px; display: flex; flex-direction: column; gap: 14px; scroll-behavior: smooth; }
+  .msg { max-width: 82%; padding: 10px 14px; border-radius: 14px; white-space: pre-wrap; overflow-wrap: anywhere; animation: rise .25s ease both; }
+  .msg.user { align-self: flex-end; background: var(--ink); color: var(--bg); border-bottom-right-radius: 4px; }
+  .msg.bot { align-self: flex-start; background: var(--soft); border-bottom-left-radius: 4px; }
+  .recalled { align-self: flex-start; margin: -8px 0 0 4px; font: 400 11.5px/1.5 var(--mono); color: var(--muted); max-width: 82%; }
+  .recalled span { color: var(--accent); }
+  .system { align-self: center; text-align: center; font-size: 13px; color: var(--muted); padding: 6px 14px; border: 1px solid var(--line);
+            border-radius: 999px; animation: rise .25s ease both; }
+  .dots { display: inline-flex; gap: 4px; padding: 4px 0; }
+  .dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); animation: blink 1s infinite; }
+  .dots i:nth-child(2) { animation-delay: .15s; } .dots i:nth-child(3) { animation-delay: .3s; }
+  @keyframes blink { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+
+  .empty { margin: auto; text-align: center; color: var(--muted); max-width: 380px; padding: 20px 0; }
+  .empty h2 { font: 400 26px/1.15 var(--display); color: var(--ink); margin: 0 0 10px; }
+  .empty ol { text-align: left; padding-left: 20px; margin: 12px 0 0; font-size: 14px; }
+  .empty li { margin: 4px 0; }
+
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; padding: 10px 22px 0; }
+  .chip { border: 1px solid var(--line); background: transparent; border-radius: 999px; padding: 5px 11px; font-size: 12.5px; color: var(--muted); }
+  .chip:hover { color: var(--ink); border-color: var(--ink); }
+  form { display: flex; gap: 8px; padding: 12px 16px 16px; }
+  input[type=text] { flex: 1; min-width: 0; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line);
+                     border-radius: 12px; padding: 12px 14px; outline: none; }
+  input[type=text]:focus { border-color: var(--ink); }
+  .send { border: 0; background: var(--ink); color: var(--bg); border-radius: 12px; padding: 0 18px; }
+  .send:disabled { opacity: .4; cursor: default; }
+
+  /* memory panel */
+  .panel { padding: 20px; position: sticky; top: 20px; }
+  .panel h3 { font: 400 11px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px; }
+  .stat { background: var(--soft); border-radius: 10px; padding: 10px; }
+  .stat b { display: block; font: 400 26px/1 var(--display); }
+  .stat small { font-size: 11.5px; color: var(--muted); }
+  .facts { list-style: none; margin: 0 0 18px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .fact { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; font-size: 13.5px; }
+  .fact.fresh { animation: glow 1.6s ease; }
+  @keyframes glow { 0% { border-color: var(--ok); background: color-mix(in srgb, var(--ok) 10%, transparent); } }
+  .fact span { flex: 1; }
+  .fact button { border: 0; background: none; color: var(--muted); padding: 0 2px; font-size: 16px; line-height: 1.2; }
+  .fact button:hover { color: var(--no); }
+  .none { color: var(--muted); font-size: 13.5px; margin: 0 0 18px; }
+  .summary { font-size: 13.5px; color: var(--muted); margin: 0 0 18px; }
+  .actions { display: flex; flex-direction: column; gap: 8px; }
+  .btn { width: 100%; padding: 10px 12px; border: 1px solid var(--line); background: var(--paper); border-radius: 10px; font-size: 13.5px; }
+  .btn:hover:not(:disabled) { border-color: var(--ink); }
+  .btn:disabled { opacity: .45; cursor: default; }
+  .btn.danger { color: var(--no); }
+  .btn.dark { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+  .toasts { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; z-index: 5; pointer-events: none; }
+  .toast { background: var(--ink); color: var(--bg); padding: 9px 14px; border-radius: 10px; font-size: 13px; animation: rise .25s ease both; box-shadow: 0 6px 24px rgba(0,0,0,.15); }
+
+  .how { margin-top: 28px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  @media (max-width: 700px) { .how { grid-template-columns: 1fr; } }
+  .how div { border-top: 1px solid var(--line); padding-top: 12px; font-size: 13.5px; color: var(--muted); }
+  .how b { display: block; font: 400 22px/1.2 var(--display); color: var(--ink); margin-bottom: 4px; }
+  footer { margin-top: 36px; font-size: 12.5px; color: var(--muted); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <p class="eyebrow">Browser demo</p>
+      <h1>Local AI Agent <em>with Memory</em></h1>
+    </div>
+    <nav class="links">
+      <a class="pill primary" id="live-link" href="https://local-ai-agent-memory.streamlit.app" target="_blank" rel="noopener">Live demo with real AI ↗</a>
+      <a class="pill" href="https://github.com/naveditachaudhary-pixel/local-ai-agent-memory" target="_blank" rel="noopener">Code on GitHub ↗</a>
+    </nav>
+  </header>
+
+  <p class="notice"><span aria-hidden="true">ⓘ</span><span><b>How this demo works:</b> the memory is real. It's saved only in your browser and survives a page reload. The replies are pre-written templates, not a language model. The full app runs a real model on your own computer, and the live demo uses a hosted one.</span></p>
+
+  <div class="grid">
+    <section class="card chat" aria-label="Chat">
+      <div class="log" id="log" aria-live="polite"></div>
+      <div class="chips" id="chips"></div>
+      <form id="form" autocomplete="off">
+        <input type="text" id="input" placeholder="Tell me about yourself…" aria-label="Message" maxlength="400">
+        <button class="send" id="send" type="submit" disabled>Send</button>
+      </form>
+    </section>
+
+    <aside class="card panel" aria-label="Memory">
+      <h3>Memory</h3>
+      <div class="stats">
+        <div class="stat"><b id="n-facts">0</b><small>Facts</small></div>
+        <div class="stat"><b id="n-chats">0</b><small>Past chats</small></div>
+        <div class="stat"><b id="n-turns">0</b><small>Turns</small></div>
+      </div>
+      <h3>What I remember about you</h3>
+      <div id="facts"></div>
+      <h3>Summary</h3>
+      <p class="summary" id="summary"></p>
+      <div class="actions">
+        <button class="btn dark" id="new-session">↻ Start a new session</button>
+        <button class="btn danger" id="clear">Clear all memory</button>
+      </div>
+    </aside>
+  </div>
+
+  <section class="how">
+    <div><b>1 · Recall</b>Each message is matched against saved facts and past chats. The closest ones are pulled into the reply.</div>
+    <div><b>2 · Respond</b>The full app gives those memories to a local model through Ollama. This page uses templates instead.</div>
+    <div><b>3 · Remember</b>New facts are extracted and saved. If a fact changes, like where you live, the old one is replaced.</div>
+  </section>
+
+  <footer>
+    <span>© 2026 Navedita Chaudhary</span>
+    <a href="https://github.com/naveditachaudhary-pixel/local-ai-agent-memory#quick-start" target="_blank" rel="noopener">Run the full version on your computer →</a>
+  </footer>
+</div>
+<div class="toasts" id="toasts"></div>
+
+<script>
+(() => {
+  "use strict";
+  const KEY = "local-agent-memory-demo.v1";
+  const SUMMARIZE_EVERY = 4;
+  const $ = (id) => document.getElementById(id);
+
+  // ---------- storage ----------
+  const blank = () => ({ facts: [], exchanges: [], turns: 0, summary: "", summaryTurn: 0 });
+  function load() {
+    try { const raw = localStorage.getItem(KEY); return raw ? { ...blank(), ...JSON.parse(raw) } : blank(); }
+    catch { return blank(); }
+  }
+  let mem = load();
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(mem)); } catch { /* storage unavailable: memory lasts for this page only */ } }
+  const uid = () => Math.random().toString(36).slice(2, 10);
+
+  // ---------- text helpers ----------
+  const STOP = new Set("a an the and or but i i'm im me my you your is am are was were be to of in on at for with it this that what who where when how do does did can could would will about tell know remember please just so really very".split(" "));
+  const stem = (w) => w.replace(/'s$/, "").replace(/(ing|ed|es|s)$/, "") || w;
+  const tokens = (t) => (t.toLowerCase().match(/[a-z0-9']+/g) || []).filter((w) => !STOP.has(w)).map(stem);
+  const toTheir = (t) => t.replace(/\bmy\b/gi, "their").replace(/\bmyself\b/gi, "themselves").replace(/\bme\b/gi, "them").replace(/\bI'm\b/g, "they're").replace(/\bI\b/g, "they");
+  const toYour = (t) => t.replace(/\bmy\b/gi, "your").replace(/\bmyself\b/gi, "yourself").replace(/\bme\b/gi, "you").replace(/\bI'm\b/g, "you're").replace(/\bI\b/g, "you");
+  const clean = (t) => t.trim().replace(/\s+/g, " ").replace(/^(a|an|the) (?=\w)/i, (m) => m.toLowerCase());
+  const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+  const list = (xs) => xs.length < 2 ? xs.join("") : xs.slice(0, -1).join(", ") + " and " + xs[xs.length - 1];
+  const esc = (t) => t.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  // ---------- fact extraction ----------
+  // slot: facts in a "single" slot replace each other (you only live in one place); others accumulate.
+  const END = String.raw`(?=\s+(?:and|but)\s+(?:i|i'm|my|im)\b|\s+but\b|[,.!?;]|$)`;
+  const NOT_NAMES = new Set("Not So Just Here Fine Good Okay Ok Sure Also Back Done Ready Sorry Glad Happy Tired Busy Working Trying Going Looking Learning Studying Training Building From In At".split(" "));
+  const RULES = [
+    { slot: "name", single: true, re: /\b(?:my name is|my name's|call me|i'm called|i am called)\s+([A-Z][a-zA-Z'-]+)/i,
+      make: (v) => ({ value: cap(v), you: `your name is ${cap(v)}`, they: `name is ${cap(v)}`, possessive: true }) },
+    { slot: "name", single: true, re: /(?:^|[.!?,]\s*|\b(?:[Hh]i|[Hh]ello|[Hh]ey)\b[,!]?\s*)(?:[Ii]'m|[Ii] am|[Ii]m)\s+([A-Z][a-zA-Z'-]+)\b/,
+      ok: (v) => !NOT_NAMES.has(v), make: (v) => ({ value: v, you: `your name is ${v}`, they: `name is ${v}`, possessive: true }) },
+    { slot: "job", single: true, re: new RegExp(String.raw`\bi (?:work|am working|'m working) as (an? [^,.!?;]+?)${END}`, "i"),
+      make: (v) => ({ value: v, you: `you work as ${v}`, they: `works as ${v}` }) },
+    { slot: "job", single: true, re: new RegExp(String.raw`\b(?:i'm|i am|im) (an? (?!bit|little|lot|big fan|fan|huge|student)[a-z][a-z -]{2,40}?)${END}`, "i"),
+      make: (v) => ({ value: v, you: `you're ${v}`, they: `is ${v}` }) },
+    { slot: "workplace", single: true, re: new RegExp(String.raw`\bi work (?:at|for) ([^,.!?;]+?)${END}`, "i"),
+      make: (v) => ({ value: v, you: `you work at ${v}`, they: `works at ${v}` }) },
+    { slot: "location", single: true, re: new RegExp(String.raw`\bi (?:just |recently )?(?:moved|relocated) to ([^,.!?;]+?)${END}`, "i"),
+      make: (v) => ({ value: v, you: `you live in ${v}`, they: `lives in ${v}`, moved: true }) },
+    { slot: "location", single: true, re: new RegExp(String.raw`\b(?:i live|i'm living|i am living|i'm based|i am based|im based) in ([^,.!?;]+?)${END}`, "i"),
+      make: (v) => ({ value: v, you: `you live in ${v}`, they: `lives in ${v}` }) },
+    { slot: "hometown", single: true, re: new RegExp(String.raw`\b(?:i'm|i am|im|i come) from ([A-Z][^,.!?;]*?)${END}`, "i"),
+      make: (v) => ({ value: v, you: `you're from ${v}`, they: `is from ${v}` }) },
+    { slot: "study", single: true, re: new RegExp(String.raw`\bi(?:'m| am)? (?:study|studying|major in|majoring in) ([^,.!?;]+?)${END}`, "i"),
+      make: (v) => ({ value: v, you: `you study ${toYour(v)}`, they: `studies ${toTheir(v)}` }) },
+    { slot: "school", single: true, re: new RegExp(String.raw`\b(?:i'm|i am|im) a student at ([^,.!?;]+?)${END}`, "i"),
+      make: (v) => ({ value: v, you: `you're a student at ${v}`, they: `is a student at ${v}` }) },
+    { slot: "project", re: new RegExp(String.raw`\b(?:i'm|i am|im) (?:working on|building|writing|making) ([^,.!?;]+?)${END}`, "i"),
+      make: (v) => ({ value: v, you: `you're working on ${toYour(v)}`, they: `is working on ${toTheir(v)}` }) },
+    { slot: "goal", re: new RegExp(String.raw`\b(?:i'm|i am|im) (training for|preparing for|learning|saving for|planning) ([^,.!?;]+?)${END}`, "i"), two: true,
+      make: (verb, v) => ({ value: v, you: `you're ${verb.toLowerCase()} ${toYour(v)}`, they: `is ${verb.toLowerCase()} ${toTheir(v)}` }) },
+    { slot: "pet", re: /\bi have an? (dog|cat|puppy|kitten|rabbit|bird|parrot|hamster|horse)(?: named| called)? ([A-Z][a-zA-Z]+)/i, two: true,
+      make: (kind, name) => ({ value: `${kind.toLowerCase()} ${cap(name)}`, you: `you have a ${kind.toLowerCase()} named ${cap(name)}`, they: `has a ${kind.toLowerCase()} named ${cap(name)}` }) },
+    { slot: "favorite", single: true, keyed: true, re: new RegExp(String.raw`\bmy fav(?:ou?rite)? ([a-z ]{2,24}?) is ([^,.!?;]+?)${END}`, "i"), two: true,
+      make: (thing, v) => ({ key: thing.toLowerCase(), value: v, you: `your favorite ${thing.toLowerCase()} is ${v}`, they: `favorite ${thing.toLowerCase()} is ${v}`, possessive: true }) },
+    { slot: "dislike", re: new RegExp(String.raw`\bi (?:hate|dislike|don't like|do not like|can't stand|cannot stand) ([^,.!?;]+?)${END}`, "i"),
+      make: (v) => ({ value: v, you: `you don't like ${toYour(v)}`, they: `doesn't like ${toTheir(v)}` }) },
+    { slot: "like", re: new RegExp(String.raw`\bi (?:really |also |absolutely )?(?:like|love|enjoy|adore) ([^,.!?;]+?)(?=\s+but\b|[,.!?;]|$)`, "i"),
+      make: (v) => ({ value: v, you: `you enjoy ${toYour(v)}`, they: `enjoys ${toTheir(v)}` }) },
+  ];
+
+  const isQuestion = (t) => /\?\s*$/.test(t) || /^\s*(what|who|where|when|why|how|do|does|did|am|is|are|can|could|tell|remind|which)\b/i.test(t);
+
+  function extract(text) {
+    if (isQuestion(text)) return [];
+    const out = [];
+    for (const r of RULES) {
+      const m = text.match(r.re);
+      if (!m) continue;
+      const parts = m.slice(1).map((p) => clean(p || ""));
+      if (parts.some((p) => !p) || (r.ok && !r.ok(parts[0]))) continue;
+      if (parts[parts.length - 1].split(" ").length > 9) continue;          // too long to be a clean fact
+      if (out.some((f) => f.slot === r.slot && (r.single || f.value === parts[parts.length - 1]))) continue;
+      const f = r.make(...parts);
+      out.push({ slot: r.slot, single: !!r.single, ...f });
+    }
+    return out;
+  }
+
+  function sentence(f) { return f.possessive ? `The user's ${f.they}.` : `The user ${f.they}.`; }
+
+  // Save facts. Returns {added, updated} so the reply and toasts can say what changed.
+  function remember(found) {
+    const added = [], updated = [];
+    for (const f of found) {
+      const same = mem.facts.find((g) => g.slot === f.slot && (f.key ? g.key === f.key : true) &&
+                                      (f.single || g.value.toLowerCase() === f.value.toLowerCase()));
+      if (same && same.value.toLowerCase() === f.value.toLowerCase()) continue;  // duplicate
+      const fact = { id: uid(), slot: f.slot, key: f.key, value: f.value, you: f.you, they: f.they,
+                     possessive: !!f.possessive, text: sentence(f), created: Date.now(), fresh: true };
+      if (same) { mem.facts = mem.facts.filter((g) => g !== same); updated.push({ fact, old: same }); }
+      else added.push(fact);
+      mem.facts.unshift(fact);
+    }
+    return { added, updated };
+  }
+
+  // ---------- recall ----------
+  const SLOT_WORDS = {
+    name: "name called who", job: "job work do career profession living occupation role", workplace: "work company employer job",
+    location: "live where city based home town place move", hometown: "from where originally grow grew", study: "study school major degree university college student class",
+    school: "school university college student", project: "work project build making side", goal: "train goal learn prepar plan save race marathon",
+    pet: "pet dog cat animal", favorite: "favorite favourite fav", like: "like love enjoy hobby hobbi fun interest free weekend do", dislike: "hate dislike like",
+  };
+  const SLOT_TOKENS = Object.fromEntries(Object.entries(SLOT_WORDS).map(([k, v]) => [k, new Set(v.split(" ").map(stem))]));
+  const ABOUT_ME = /\b(about me|know about|remember about|what do you (?:know|remember)|who am i|my profile|everything you know)\b/i;
+
+  function recall(text) {
+    if (ABOUT_ME.test(text)) return { facts: [...mem.facts], exchanges: [], all: true };
+    const q = new Set(tokens(text));
+    const scored = mem.facts.map((f) => {
+      let s = 0;
+      for (const w of SLOT_TOKENS[f.slot] || []) if (q.has(w)) s += 2;
+      if (f.key && q.has(stem(f.key))) s += 2;
+      for (const w of tokens(f.value)) if (q.has(w)) s += 1.5;
+      return { f, s };
+    }).filter((x) => x.s >= 2).sort((a, b) => b.s - a.s);
+    const exchanges = mem.exchanges.map((e) => {
+      const et = new Set(tokens(e.user)); let s = 0; for (const w of q) if (et.has(w)) s++; return { e, s };
+    }).filter((x) => x.s >= 2).sort((a, b) => b.s - a.s).slice(0, 2).map((x) => x.e);
+    return { facts: scored.slice(0, 4).map((x) => x.f), exchanges, all: false };
+  }
+
+  // ---------- replies (templates) ----------
+  const nameOf = () => (mem.facts.find((f) => f.slot === "name") || {}).value;
+  const youList = (facts) => list(facts.map((f) => f.you));
+  let fallbackTurn = 0;
+
+  function reply(text, learned, rec) {
+    const { added, updated } = learned;
+    const name = nameOf();
+    const greeting = /^\s*(hi|hello|hey|good (morning|afternoon|evening)|yo)\b/i.test(text);
+
+    if (added.length || updated.length) {
+      const parts = [];
+      const newName = added.find((f) => f.slot === "name");
+      if (newName) parts.push(`Nice to meet you, ${newName.value}!`);
+      const rest = added.filter((f) => f.slot !== "name");
+      if (rest.length) parts.push(`I'll remember that ${youList(rest)}.`);
+      for (const { fact, old } of updated) {
+        parts.push(fact.slot === "name" ? `Got it, I'll call you ${fact.value} from now on.`
+          : `Got it, I've updated that: ${fact.you} now, not ${old.value}.`);
+      }
+      return parts.join(" ");
+    }
+
+    if (isQuestion(text)) {
+      if (rec.all) {
+        if (!mem.facts.length) return "I don't know anything about you yet. Tell me your name, what you do or what you enjoy, and I'll remember it.";
+        const ordered = [...rec.facts].sort((a, b) => (a.slot === "name" ? -1 : b.slot === "name" ? 1 : 0));
+        return `Here's what I remember: ${youList(ordered)}.`;
+      }
+      if (rec.facts.length) return cap(youList(rec.facts.slice(0, 2))) + ".";
+      if (rec.exchanges.length) return `We talked about that before. You said: “${rec.exchanges[0].user}”`;
+      return "I don't know that yet. Tell me and I'll remember it.";
+    }
+
+    if (greeting) return name ? `Hi ${name}, good to see you again!` : "Hi! Tell me a bit about yourself, and I'll remember it next time.";
+    if (/\b(thanks|thank you|thx|cool|nice|great|awesome)\b/i.test(text)) return "Anytime! Try starting a new session and asking what I remember.";
+    if (rec.facts.length) return `That ties in with what I know: ${youList(rec.facts.slice(0, 2))}.`;
+    const lines = [
+      "I'm a browser demo with pre-written replies, so I can't chat freely. I can remember things about you, though. Try telling me your name, your job or what you enjoy.",
+      "Noted. I only pick up facts phrased like “I work as…”, “I live in…” or “I love…”. The full app uses a real model and understands much more.",
+    ];
+    return lines[fallbackTurn++ % lines.length];
+  }
+
+  function summarize() {
+    if (!mem.facts.length) return "";
+    const name = nameOf();
+    const preds = mem.facts.filter((f) => f.slot !== "name").slice().reverse().map((f) => (f.possessive ? `whose ${f.they}` : f.they));
+    if (!preds.length) return `The user's name is ${name}.`;
+    return `${name || "The user"} ${list(preds.slice(0, 6))}.`;
+  }
+
+  // ---------- UI ----------
+  const log = $("log"), input = $("input"), send = $("send");
+  let chat = [], busy = false;
+
+  function toast(text) {
+    const el = document.createElement("div"); el.className = "toast"; el.textContent = text;
+    $("toasts").appendChild(el); setTimeout(() => el.remove(), 2800);
+  }
+
+  function renderPanel() {
+    $("n-facts").textContent = mem.facts.length;
+    $("n-chats").textContent = mem.exchanges.length;
+    $("n-turns").textContent = mem.turns;
+    const box = $("facts");
+    if (!mem.facts.length) box.innerHTML = '<p class="none">Nothing yet. Tell me about yourself!</p>';
+    else {
+      box.innerHTML = '<ul class="facts">' + mem.facts.map((f) =>
+        `<li class="fact${f.fresh ? " fresh" : ""}"><span>${esc(f.text)}</span><button data-id="${f.id}" aria-label="Forget this" title="Forget this">×</button></li>`).join("") + "</ul>";
+      mem.facts.forEach((f) => delete f.fresh);
+    }
+    $("summary").textContent = mem.summary ? mem.summary + ` (updated at turn ${mem.summaryTurn})` : `No summary yet. It's written every ${SUMMARIZE_EVERY} turns.`;
+    $("new-session").disabled = !chat.length;
+    $("clear").disabled = !mem.facts.length && !mem.exchanges.length;
+  }
+
+  const CHIPS_NEW = ["Hi, I'm Sam and I work as a nurse", "I live in Cincinnati and I love hiking", "I'm training for a half marathon"];
+  const CHIPS_RETURN = ["What do you know about me?", "What's my name?", "Actually, I just moved to Austin"];
+  function renderChips() {
+    const set = mem.facts.length >= 2 ? CHIPS_RETURN : CHIPS_NEW;
+    $("chips").innerHTML = set.map((c) => `<button class="chip" type="button">${esc(c)}</button>`).join("");
+  }
+
+  function renderLog() {
+    log.innerHTML = "";
+    if (!chat.length) {
+      const n = mem.facts.length;
+      log.innerHTML = n
+        ? `<div class="empty"><h2>Welcome back${nameOf() ? ", " + esc(nameOf()) : ""}.</h2>This is a fresh session: the chat is empty, but I still remember ${n} thing${n > 1 ? "s" : ""} about you. Ask me what I know.</div>`
+        : `<div class="empty"><h2>Tell me about yourself.</h2>Then see whether I remember.<ol><li>Share your name, job or a hobby.</li><li>Press <b>Start a new session</b> or reload the page.</li><li>Ask <i>“What do you know about me?”</i></li></ol></div>`;
+      return;
+    }
+    for (const m of chat) addBubble(m, false);
+  }
+
+  function addBubble(m, scroll = true) {
+    if (m.role === "system") { const s = document.createElement("div"); s.className = "system"; s.textContent = m.text; log.appendChild(s); }
+    else {
+      const b = document.createElement("div"); b.className = "msg " + m.role; b.textContent = m.text; log.appendChild(b);
+      if (m.recalled && m.recalled.length) {
+        const r = document.createElement("div"); r.className = "recalled";
+        r.innerHTML = "<span>Recalled:</span> " + m.recalled.map(esc).join(" · "); log.appendChild(r);
+      }
+    }
+    if (scroll) log.scrollTop = log.scrollHeight;
+  }
+
+  async function typeOut(text) {
+    const dots = document.createElement("div"); dots.className = "msg bot"; dots.innerHTML = '<span class="dots"><i></i><i></i><i></i></span>';
+    log.appendChild(dots); log.scrollTop = log.scrollHeight;
+    await new Promise((r) => setTimeout(r, 450 + Math.random() * 300));
+    dots.textContent = "";
+    const words = text.split(/(\s+)/);
+    for (const w of words) { dots.textContent += w; if (w.trim()) await new Promise((r) => setTimeout(r, 22)); log.scrollTop = log.scrollHeight; }
+    dots.remove();
+  }
+
+  async function handle(text) {
+    text = text.trim(); if (!text || busy) return;
+    busy = true; document.body.dataset.busy = "1"; send.disabled = true; input.value = "";
+    if (!chat.length) log.innerHTML = "";
+    const userMsg = { role: "user", text }; chat.push(userMsg); addBubble(userMsg);
+
+    const rec = recall(text);                       // 1. recall
+    const learned = remember(extract(text));        // 3. remember (facts first, so the reply can mention them)
+    const answer = reply(text, learned, rec);       // 2. respond
+    await typeOut(answer);
+    const recalled = rec.all ? [] : rec.facts.map((f) => f.text);
+    const botMsg = { role: "bot", text: answer, recalled }; chat.push(botMsg); addBubble(botMsg);
+
+    mem.exchanges.unshift({ id: uid(), user: text, bot: answer, created: Date.now() });
+    mem.exchanges = mem.exchanges.slice(0, 200);
+    mem.turns += 1;
+    if (mem.turns % SUMMARIZE_EVERY === 0) { mem.summary = summarize(); mem.summaryTurn = mem.turns; toast("Summary refreshed"); }
+    save();
+    learned.added.forEach((f) => toast("🧠 Remembered: " + f.text));
+    learned.updated.forEach(({ fact }) => toast("🧠 Updated: " + fact.text));
+    renderPanel(); renderChips();
+    busy = false; delete document.body.dataset.busy; send.disabled = !input.value.trim(); input.focus();
+  }
+
+  $("form").addEventListener("submit", (e) => { e.preventDefault(); handle(input.value); });
+  input.addEventListener("input", () => { send.disabled = busy || !input.value.trim(); });
+  $("chips").addEventListener("click", (e) => { const b = e.target.closest(".chip"); if (b) handle(b.textContent); });
+  $("facts").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-id]"); if (!b) return;
+    const f = mem.facts.find((x) => x.id === b.dataset.id);
+    mem.facts = mem.facts.filter((x) => x.id !== b.dataset.id); save(); renderPanel(); renderChips();
+    if (f) toast("Forgot: " + f.text);
+  });
+  $("new-session").addEventListener("click", () => {
+    chat = []; renderLog(); renderPanel(); renderChips(); input.focus();
+  });
+  $("clear").addEventListener("click", () => {
+    if (!confirmClear()) return;
+    mem = blank(); save(); chat = []; renderLog(); renderPanel(); renderChips(); toast("All memory cleared");
+  });
+  let armed = false;
+  function confirmClear() {   // two-step button instead of a browser dialog
+    const b = $("clear");
+    if (armed) { armed = false; b.textContent = "Clear all memory"; return true; }
+    armed = true; b.textContent = "Click again to delete everything";
+    setTimeout(() => { armed = false; b.textContent = "Clear all memory"; }, 3000);
+    return false;
+  }
+
+  // Exposed for automated checks only.
+  window.__agentDemo = { extract, recall, remember: (t) => remember(extract(t)), state: () => mem };
+
+  renderLog(); renderPanel(); renderChips();
+})();
+</script>
+</body>
+</html>

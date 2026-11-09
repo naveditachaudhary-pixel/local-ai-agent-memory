@@ -1,19 +1,48 @@
-"""Streamlit chat UI for the local agent.  Run with:  streamlit run app.py"""
+"""Streamlit chat UI for the agent.  Run with:  streamlit run app.py
+
+Locally it uses Ollama. When a GROQ_API_KEY is configured (for example in Streamlit Cloud secrets),
+it switches to demo mode: a hosted model, and memory that is private to each visitor's session.
+"""
+
+import os
+import tempfile
+from pathlib import Path
 
 import streamlit as st
 
-from agent import Agent
+from agent import Agent, Settings
 from agent.memory import EXCHANGE, FACT
 
 st.set_page_config(page_title="Local AI Agent with Memory", page_icon="🧠", layout="wide")
 
 
+def groq_key() -> str:
+    try:
+        return st.secrets.get("GROQ_API_KEY", "") or os.environ.get("GROQ_API_KEY", "")
+    except Exception:  # no secrets file
+        return os.environ.get("GROQ_API_KEY", "")
+
+
+DEMO = bool(groq_key())
+
+
 @st.cache_resource
-def get_agent() -> Agent:
+def get_local_agent() -> Agent:
     return Agent()
 
 
-agent = get_agent()
+def get_demo_agent() -> Agent:
+    """One agent per visitor, with memory in a private temporary folder."""
+    if "agent" not in st.session_state:
+        os.environ["GROQ_API_KEY"] = groq_key()
+        folder = tempfile.mkdtemp(prefix="agent-demo-")
+        settings = Settings(backend="groq", data_dir=Path(folder),
+                            max_distance=float(os.environ.get("AGENT_MAX_DISTANCE", "0.65")))
+        st.session_state.agent = Agent(settings)
+    return st.session_state.agent
+
+
+agent = get_demo_agent() if DEMO else get_local_agent()
 
 # ---------- model check ----------
 ok, status = agent.llm.status() if hasattr(agent.llm, "status") else (True, "custom model")
@@ -34,6 +63,8 @@ if not ok:
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
+if "sent" not in st.session_state:
+    st.session_state.sent = 0
 
 # ---------- sidebar: what the agent remembers ----------
 with st.sidebar:
@@ -45,6 +76,14 @@ with st.sidebar:
     c1.metric("Facts", len(facts))
     c2.metric("Past chats", agent.memory.count(EXCHANGE))
     c3.metric("Turns", agent.summaries.turns)
+
+    if st.button("Start a new session", icon=":material/restart_alt:", use_container_width=True,
+                 disabled=not st.session_state.messages,
+                 help="Clears the chat, like closing and reopening the app. Memory is kept."):
+        agent.new_session()
+        st.session_state.messages = []
+        st.session_state.new_session = True
+        st.rerun()
 
     st.markdown("**Summary**")
     st.caption(agent.summaries.summary or "No summary yet. It builds up as you chat.")
@@ -72,7 +111,26 @@ with st.sidebar:
 
 # ---------- chat ----------
 st.title("🧠 Local AI Agent with Memory")
-st.caption("Runs entirely on your machine. Remembers facts and past conversations between sessions.")
+if DEMO:
+    st.info(
+        "**Online demo.** Replies come from a hosted model so you can try it without installing anything. "
+        "Your memory is private to this browser tab and is deleted when you close it. "
+        "The full version runs entirely on your own computer: "
+        "[see the code on GitHub](https://github.com/naveditachaudhary-pixel/local-ai-agent-memory).",
+        icon=":material/info:",
+    )
+else:
+    st.caption("Runs entirely on your machine. Remembers facts and past conversations between sessions.")
+
+if st.session_state.pop("new_session", False):
+    st.success("New session started. The chat is empty, but the memory isn't. "
+               "Ask me what I remember about you.", icon=":material/restart_alt:")
+elif not st.session_state.messages and not agent.memory.count():
+    st.markdown(
+        "**Try this:** tell me a few things about yourself, for example *“I'm Sam, I work as a nurse "
+        "and I'm training for a half marathon.”* Then press **Start a new session** in the sidebar "
+        "and ask *“What do you know about me?”*"
+    )
 
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
@@ -80,13 +138,25 @@ for msg in st.session_state.messages:
         if msg.get("recalled"):
             st.caption("Recalled: " + " · ".join(msg["recalled"]))
 
+limit = agent.settings.demo_message_limit
+if DEMO and st.session_state.sent >= limit:
+    st.warning(f"That's the {limit}-message limit for the online demo. "
+               "To keep going, run it on your own computer (instructions on GitHub).")
+    st.stop()
+
 if prompt := st.chat_input("Say something…"):
+    st.session_state.sent += 1
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        reply = st.write_stream(agent.stream(prompt))
+        try:
+            reply = st.write_stream(agent.stream(prompt))
+        except Exception as err:  # e.g. the hosted model is busy or rate-limited
+            st.session_state.messages.pop()
+            st.error(f"The model didn't respond ({type(err).__name__}). Please try again in a moment.")
+            st.stop()
         recalled = [m.text for m in agent.last_recalled if m.kind == FACT]
         if recalled:
             st.caption("Recalled: " + " · ".join(recalled))
